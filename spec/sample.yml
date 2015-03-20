@@ -1,0 +1,117 @@
+default_fields_format:
+  id:
+    type: 'String'
+  project:
+    type: 'Hash'
+    required: true
+    has_id: true
+    on_create: true
+  tracker:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+    values:
+      '5': '契約'
+      '6': '問い合わせ'
+      '7': 'クレーム'
+      '8': '履歴'
+  subject:
+    type: 'String'
+    required: false
+    on_create: true
+  description:
+    type: 'String'
+    required: false
+    on_create: true
+  priority:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+    values:
+      '1': '低め'
+      '2': '通常'
+      '3': '高め'
+      '4': '新規'
+      '5': '今すぐ'
+  category:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  status:
+    type: 'Hash'
+    required: false
+    has_id: true
+    values:
+      '1': '新規'
+      '2': '進行中'
+      '3': '解決'
+      '4': 'フィードバック'
+      '5': '終了'
+      '6': '却下'
+  fixed_version:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  assigned_to:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  custom_fields:
+    type: 'Array'
+    required: false
+  parent_issue:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  watcher_user:
+    type: 'Array'
+    required: false
+    on_create: true
+  is_private:
+    type: 'Boolean'
+    required: false
+    values:
+      '0': 'はい'
+      '1': 'いいえ'
+    on_create: true
+  estimated_hours:
+    type: 'String'
+    required: false
+    on_create: true
+  author:
+    type: 'Hash'
+    required: false
+    has_id: true
+  start_date:
+    type: 'Date'
+    required: false
+  created_on:
+    type: 'Date'
+    required: false
+  updated_on:
+    type: 'Date'
+    required: false
+  notes:
+    type: 'String'
+    required: false
+  private_notes:
+    type: 'String'
+    required: false
+
+custom_fields_format:
+  zip:
+    id: 8
+    name: '郵便番号'
+    type: 'String'
+    required: true
+  address:
+    id: 9
+    name: '契約者住所'
+    type: 'String'
+    required: true

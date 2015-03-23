@@ -228,10 +228,6 @@ RSpec.describe RedmineApi::Api do
     end
   end
 
-  describe '.get_ticket' do
-    
-  end
-
   # include_examples 'Real connection'
   include_examples 'Fake connection'
 

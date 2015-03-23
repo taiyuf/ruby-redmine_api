@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 require 'yaml'
-# require 'hashie'
+require 'net/http'
+require 'uri'
+require 'hashie'
 require 'webmock'
 require 'logger'
-
 
 module RedmineApi
 
@@ -63,6 +64,18 @@ module RedmineApi
 
     end
 
+    #===
+    #
+    # @param  Fixnum
+    # @return Hash
+    #
+    # 渡されたIDのチケットをRedmineのAPIを叩いて取得し、Hashにして返す
+    #
+    # @example
+    #
+    # r    = RedmineApi::Api.new(config: config)
+    # hash = r.get_ticket(9) # => {id: 9, project: {id: .... } }
+    #
     def get_ticket(id)
       req              = make_request_get("#{self.uri}/issues/#{id}.json")
       req.content_type = 'application/json; charset=UTF-8'
@@ -85,6 +98,11 @@ module RedmineApi
     #
     # Net::HTTPでRedmineのAPIを叩いてチケットを作成する。作成したチケット情報をHashで返す
     #
+    # @example
+    #
+    # r    = RedmineApi::Api.new(config: config)
+    # hash = r.create_ticket(hash) # => {id: N, project: {id: .... } }
+    # 
     def create_ticket(hash)
       req              = make_request_post("#{self.uri}/issues.json")
       req.content_type = 'application/json'
@@ -111,7 +129,8 @@ module RedmineApi
     #
     # @example
     #
-    # api.delete_ticket(1) # => true or false
+    # r = RedmineApi::Api.new(config: config)
+    # r.delete_ticket(1) # => true or false
     #
     def delete_ticket(id)
       req = make_request_delete("#{self.uri}/issues/#{id}.json")
@@ -141,11 +160,9 @@ module RedmineApi
     # r = Redmine.new # デフォルトは外への通信は許可
     #  .
     #  .
-    #  .
-    # json = r.get_issue(N) # => json = '{"issue": {"id": ... }'
     #
     # r.fake_mode(true)
-    # r.get_issue(N) # => SocketError, getaddrinfo: nodename nor servname provided, or not known
+    # r.get_ticket(N) # => SocketError, getaddrinfo: nodename nor servname provided, or not known
     #
     def fake_mode(flag=nil)
       prefix = '*** Redmine::fake_mode:'

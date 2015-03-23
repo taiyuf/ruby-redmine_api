@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+require 'yaml'
+# require 'hashie'
+require 'webmock'
+require 'logger'
+
+
 module RedmineApi
 
   class Api
@@ -42,6 +48,9 @@ module RedmineApi
       self.user_name  = @@config[:user_name]  if @@config[:user_name]
       self.password   = @@config[:password]   if @@config[:password]
 
+      @fake_mode = nil
+      self.fake_mode(false)
+
       %i{ uri api_key user_name password }.each do |f|
         if hash[f]
           if f.to_s == 'uri'
@@ -61,34 +70,36 @@ module RedmineApi
       res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
 
       unless res.code.to_i == 200
-        Rails.logger.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
+        log = Logger.new(STDOUT)
+        log.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
         return nil
       end
 
-      res.body.to_json
+      Hashie.symbolize_keys!(JSON.parse(res.body))[:issue]
     end
 
     #===
     #
-    # @param  JSON
-    # @return JSON
+    # @param  Hash
+    # @return Hash
     #
-    # Net::HTTPでRedmineのAPIを叩いてチケットを作成する。作成したチケット情報をJSONで返す
+    # Net::HTTPでRedmineのAPIを叩いてチケットを作成する。作成したチケット情報をHashで返す
     #
-    def create_ticket(json)
+    def create_ticket(hash)
       req              = make_request_post("#{self.uri}/issues.json")
       req.content_type = 'application/json'
       req['Accept']    = 'application/json'
-      req.body         = json
+      req.body         = { issue: hash }.to_json
 
       res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
 
       unless res.code.to_i == 201
+        log = Logger.new(STDOUT)
         log.debug("Error code: #{res.code}, Error Message: #{res.message} #{res.body}")
         return false
       end
 
-      res.body.to_json
+      Hashie.symbolize_keys!(JSON.parse(res.body))[:issue]
     end
 
     #===
@@ -115,6 +126,60 @@ module RedmineApi
       true
     end
 
+    #===
+    #
+    # @param   Boolean
+    # @return  Boolean
+    # @default false
+    #
+    # Redmineインスタンスの、外への通信を許可するかどうか
+    #
+    # デフォルトはfalseで、外への通信は許可されている。trueを与えると、外への通信は許可されないため、Webmockモジュールでmock or stubで受け取らないとエラーになる
+    #
+    # @example
+    #
+    # r = Redmine.new # デフォルトは外への通信は許可
+    #  .
+    #  .
+    #  .
+    # json = r.get_issue(N) # => json = '{"issue": {"id": ... }'
+    #
+    # r.fake_mode(true)
+    # r.get_issue(N) # => SocketError, getaddrinfo: nodename nor servname provided, or not known
+    #
+    def fake_mode(flag=nil)
+      prefix = '*** Redmine::fake_mode:'
+      log    = Logger.new(STDOUT)
+
+      if flag.nil?
+
+        if @fake_mode == true
+          log.debug("#{prefix} #{FAKE_CONNECTION_MESSAGE}")
+        else
+          log.debug("#{prefix} #{REAL_CONNECTION_MESSAGE}")
+        end
+
+      else
+
+        if flag == true
+          @fake_mode = true
+          WebMock.disable_net_connect!
+          log.debug("#{prefix} #{FAKE_CONNECTION_MESSAGE}")
+        elsif flag == false
+          @fake_mode = false
+          WebMock.allow_net_connect!
+          log.debug("#{prefix} #{REAL_CONNECTION_MESSAGE}")
+        else
+          raise "#{prefix} Unknown flag: #{flag}."
+        end
+
+      end
+
+      @fake_mode
+    end
+
+    private
+    
     #===
     #
     # @param  String

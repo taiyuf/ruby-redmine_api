@@ -1,3 +1,8 @@
+uri: 'http://example.com/hoge'
+user_name: 'foo'
+password: 'bar'
+api_key: 'hoge'
+
 default_fields_format:
   id:
     type: 'String'

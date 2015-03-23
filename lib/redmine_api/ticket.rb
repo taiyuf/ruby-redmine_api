@@ -5,31 +5,12 @@ require 'active_model'
 require 'webmock'
 require 'logger'
 
-require_relative 'ticket'
-require_relative 'api'
-
-#=lib/redmine_api/client.rb
-#
-# r = RedmineApi::Client.new(config: config)
-# r.create(params)
-# @tickets = r.where(custom_field: some_word) # => Array of RedmineApi::Ticket Object
-# @ticket  = r.find(1)                        # => RedmineApi::Ticket Object
-# r.find(1).delete
-
 module RedmineApi
 
-  class Client
+  class Ticket
     include ActiveModel::Model
 
-    attr_accessor :uri,
-      :scheme,
-      :host,
-      :port,
-      :path,
-      :api_key,
-      :user_name,
-      :password,
-      :issue,
+    attr_accessor :issue,
       :values_check,
       :subject_check,
       :watcher_user_ids,
@@ -92,7 +73,7 @@ module RedmineApi
         @@custom_fields_label.push(k.to_sym)
         @@custom_fields_ids[v[:id]] = k
       end
-      
+
       # class_eval %q{ attr_accessor *@@custom_fields_label }
       class_eval %Q{ attr_accessor #\{*@@custom_fields_label\} }
 
@@ -147,9 +128,6 @@ module RedmineApi
 
       end
 
-      @fake_mode = nil
-      fake_mode(false)
-
       # インスタンス変数作成
       @@default_fields_format.each do |k, v|
         if v[:type] == 'Hash'
@@ -160,163 +138,227 @@ module RedmineApi
       # create_field_method
 
       # デフォルト値の設定
-      parse_uri(@@config[:uri])
-      self.api_key    = @@config[:api_key]    if @@config[:api_key]
-      self.user_name  = @@config[:user_name]  if @@config[:user_name]
-      self.password   = @@config[:password]   if @@config[:password]
+      # parse_uri(@@config[:uri])
+      # self.api_key    = @@config[:api_key]    if @@config[:api_key]
+      # self.user_name  = @@config[:user_name]  if @@config[:user_name]
+      # self.password   = @@config[:password]   if @@config[:password]
       self.project_id = @@config[:project_id] if @@config[:project_id]
 
-      # 引数の値を設定
-      unless hash.nil?
-        hash.each do |k, v|
-          case k
-          when :uri
-            parse_uri(v)
-          when :config
-          else
-            if v.class.to_s == 'String'
-              instance_eval "self.#{k} = '#{v}'"
-            else
-              instance_eval "self.#{k} = #{v}"
-            end
-          end
-        end
-      end
+      @api = RedmineApi::Api.new()
+
+      create_instance(hash)
 
     end # def initialize
 
-    #===
-    #
-    # @param  Fixnum
-    # @return self or nil
-    #
-    # 引数で渡された番号のチケットをRedmineから取得し、その情報が登録されたインスタンスを返す
-    # 見つからなかった場合などはnilを返す
-    #
-    # @example
-    #
-    # @redmine.find(1)
-    # hoge = @redmine.hoge
-    #
-    def find(n)
-      req = make_request_get("#{self.uri}/issues/#{n}.json")
-      req.content_type = 'application/json; charset=UTF-8'
-      res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
-
-      unless res.code.to_i == 200
-        Rails.logger.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
-        return nil
+    def save(hash=nil)
+      if hash
+        create_instance(hash)
       end
 
-      set_value_from_json(JSON.parse(res.body))
+      if valid?
+        create_issue
+      end
+
+      self
+    end
+
+    def create(hash)
+      create_instance(hash)
+
+      if valid?
+        create_issue
+      end
+
+      self
+    end
+
+    def find(id)
+      # req = make_request_get("#{self.uri}/issues/#{n}.json")
+      # req.content_type = 'application/json; charset=UTF-8'
+      # res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
+
+      # unless res.code.to_i == 200
+      #   Rails.logger.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
+      #   return nil
+      # end
+
+      create_from_json(@api.get_ticket(id))
       self
     end
 
     #===
     #
-    # @param  nil
-    # @return self or nil
-    #
-    # ハッシュを受け取り、チケットを作成する。作成したチケット情報を自分自身に登録し、trueを、エラーが起きた時は、falseを返す
-    #
-    # @example
-    #
-    # @redmine = Remine.new( params )
-    #
-    # if @redmine.save
-    #   .
-    #   .
-    #   .
-    #
-    def save
-      create_issue if valid?
-    end
-
-    def create(hash)
-      create_issue if valid?
-    end
-
-    #===
-    #
-    # @param  Fixnum
+    # @param  Fixnum or nil
     # @return Boolean (true or false)
     #
     # チケットナンバーを受け取り、チケットを削除する
     #
     # @example
     #
-    # json = @redmine.find(1).delete
+    # redmine.find(1).delete
+    #  or
+    # redmine.delete(1)
     #
-    def delete
+    def delete(id=nil)
+      if id
+        find(id)
+      end
+
       unless self.id
         Rails.logger.debug("Redmine::delete: found No ID!")
         raise "NO ID!"
       end
 
-      req = make_request_delete("#{self.uri}/issues/#{self.id}.json")
-      res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
+      # req = make_request_delete("#{self.uri}/issues/#{self.id}.json")
+      # res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
 
-      unless res.code.to_i == 200
-        Rails.logger.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
-        return false
+      # unless res.code.to_i == 200
+      #   Rails.logger.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
+      #   return false
+      # end
+
+      # true
+      @api.delete_ticket(self.id)
+    end
+
+    private
+
+    #===
+    #
+    # @param  nil
+    # @return Self
+    #
+    # Net::HTTPでRedmineのAPIを叩いてチケットを作成する。作成したチケット情報を自分自身に登録し、自分自身を返す
+    #
+    def create_issue
+      issue         = {}
+      custom_fields = []
+      log = Logger.new(STDOUT)
+
+      @@default_fields_format.each do |k, v|
+
+        if v[:has_id].to_s == 'true'
+          label   = k.to_s == 'watcher_user' ? "#{k.to_s}_ids" : "#{k.to_s}_id"
+          current = self.send(label)
+
+          if current && v[:on_create].to_s == 'true'
+            issue[label.to_sym] = current
+          end
+        else
+          issue[k] = self.send(k) if self.send(k) or ! self.send(k).nil?
+         end
+
       end
 
-      true
+      @@custom_fields_format.each do |k, v|
+        current = self.send(k)
+        custom_fields.push({id: v[:id], value: current }) if current
+      end
+
+      issue[:custom_fields] = custom_fields
+      self.issue = { issue: issue }
+
+      # req = make_request_post("#{self.uri}/issues.json")
+      # req.content_type = 'application/json'
+      # req['Accept']    = 'application/json'
+      # req.body = self.issue.to_json
+      # res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
+
+      # unless res.code.to_i == 201
+      #   log.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
+      #   return false
+      # end
+
+      create_from_json(@api.create_ticket(self.issue.to_json))
+      # self.id ? self.id : nil
+      self
     end
 
     #===
     #
-    # @param   Boolean
-    # @return  Boolean
-    # @default false
+    # @param  Hash or nil
+    # @return nil
     #
-    # Redmineインスタンスの、外への通信を許可するかどうか
-    #
-    # デフォルトはfalseで、外への通信は許可されている。trueを与えると、外への通信は許可されないため、Webmockモジュールでmock or stubで受け取らないとエラーになる
-    #
-    # @example
-    #
-    # r = Redmine.new # デフォルトは外への通信は許可
-    #  .
-    #  .
-    #  .
-    # json = r.get_issue(N) # => json = '{"issue": {"id": ... }'
-    #
-    # r.fake_mode(true)
-    # r.get_issue(N) # => SocketError, getaddrinfo: nodename nor servname provided, or not known
-    #
-    def fake_mode(flag=nil)
-      prefix = '*** Redmine::fake_mode:'
-      log    = Logger.new(STDOUT)
-
-      if flag.nil?
-
-        if @fake_mode == true
-          log.debug("#{prefix} #{FAKE_CONNECTION_MESSAGE}")
+    def create_instance(hash=nil)
+      # 引数の値を設定
+      unless hash.nil?
+        if hash[:json]
+          create_from_json(hash[:json])
         else
-          log.debug("#{prefix} #{REAL_CONNECTION_MESSAGE}")
+          hash.each do |k, v|
+            case k
+            when :uri
+              parse_uri(v)
+            when :config
+            else
+              if v.class.to_s == 'String'
+                instance_eval "self.#{k} = '#{v}'"
+              else
+                instance_eval "self.#{k} = #{v}"
+              end
+            end
+          end
         end
+      end
 
-      else
+    end
 
-        if flag == true
-          @fake_mode = true
-          WebMock.disable_net_connect!
-          log.debug("#{prefix} #{FAKE_CONNECTION_MESSAGE}")
-        elsif flag == false
-          @fake_mode = false
-          WebMock.allow_net_connect!
-          log.debug("#{prefix} #{REAL_CONNECTION_MESSAGE}")
+
+    #===
+    #
+    # @param  JSON
+    # @return nil
+    #
+    # 
+    def create_from_json(json)
+
+      unmatch_fields = {}
+      self.json = Hashie.symbolize_keys json
+
+      self.json[:issue].each do |k, v|
+
+        if k.to_s != 'custom_fields'
+          # on default fields
+          target = @@default_fields_format[k]
+          if target
+            if target[:type].to_s == 'Hash'
+              hash = {}
+              v.each do |k1, v1|
+                hash[k1] = v1
+              end
+              self.send(k, hash)
+            else
+              self.send(k, v)
+            end
+          else
+            unmatch_fields[k] = v
+          end
+
         else
-          raise "#{prefix} Unknown flag: #{flag}."
+          # on custom fields => k == 'custom_fields'
+          v.each do |f|
+
+            id    = f[:id]
+            name  = @@custom_fields_ids[id]
+            value = f[:value]
+
+            if @@custom_fields_ids.keys.include? id
+              if value.class.to_s == 'String'
+                eval "self.#{name} = '#{value}'"
+              else
+                eval "self.#{name} = #{value}"
+              end
+            else
+              unmatch_fields[k] = v
+            end
+          end
+
         end
 
       end
 
-      @fake_mode
+      self.unmatch = unmatch_fields
     end
-
-    private
 
     #===
     #
@@ -506,115 +548,6 @@ module RedmineApi
 
     #===
     #
-    # @param  JSON
-    # @return nil
-    #
-    # 
-    def set_value_from_json(json)
-
-      unmatch_fields = {}
-      self.json = Hashie.symbolize_keys json
-
-      self.json[:issue].each do |k, v|
-
-        if k.to_s != 'custom_fields'
-          # on default fields
-          target = @@default_fields_format[k]
-          if target
-            if target[:type].to_s == 'Hash'
-              hash = {}
-              v.each do |k1, v1|
-                hash[k1] = v1
-              end
-              self.send(k, hash)
-            else
-              self.send(k, v)
-            end
-          else
-            unmatch_fields[k] = v
-          end
-
-        else
-          # on custom fields => k == 'custom_fields'
-          v.each do |f|
-
-            id    = f[:id]
-            name  = @@custom_fields_ids[id]
-            value = f[:value]
-
-            if @@custom_fields_ids.keys.include? id
-              if value.class.to_s == 'String'
-                eval "self.#{name} = '#{value}'"
-              else
-                eval "self.#{name} = #{value}"
-              end
-            else
-              unmatch_fields[k] = v
-            end
-          end
-
-        end
-
-      end
-
-      self.unmatch = unmatch_fields
-    end
-
-    #===
-    #
-    # @param  nil
-    # @return Self
-    #
-    # ハッシュを受け取り、チケットを作成する。作成したチケット情報を自分自身に登録し、自分自身を返す
-    #
-    def create_issue
-      issue         = {}
-      custom_fields = []
-      log = Logger.new(STDOUT)
-
-      @@default_fields_format.each do |k, v|
-
-        if v[:has_id].to_s == 'true'
-          label   = k.to_s == 'watcher_user' ? "#{k.to_s}_ids" : "#{k.to_s}_id"
-          current = self.send(label)
-
-          if current && v[:on_create].to_s == 'true'
-            issue[label.to_sym] = current
-          end
-        else
-          issue[k] = self.send(k) if self.send(k) or ! self.send(k).nil?
-         end
-
-      end
-
-      @@custom_fields_format.each do |k, v|
-        current = self.send(k)
-        custom_fields.push({id: v[:id], value: current }) if current
-      end
-
-      issue[:custom_fields] = custom_fields
-      self.issue = { issue: issue }
-
-      req = make_request_post("#{self.uri}/issues.json")
-      req.content_type = 'application/json'
-      req['Accept']    = 'application/json'
-      req.body = self.issue.to_json
-      res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
-
-      unless res.code.to_i == 201
-        log.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
-        return false
-      end
-
-      set_value_from_json(JSON.parse(res.body))
-      # self.id ? self.id : nil
-      self
-    end
-
-=begin
-    
-    #===
-    #
     # @param  nil
     # @return nil
     #
@@ -686,10 +619,10 @@ module RedmineApi
       end
 
     end
+    
 
-=end
-
-  end
-
-
+  end  
 end
+
+
+

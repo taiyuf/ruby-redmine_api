@@ -23,4 +23,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rspec"
   spec.add_development_dependency "hashie"
   spec.add_development_dependency "activemodel"
+  spec.add_development_dependency 'webmock'
 end

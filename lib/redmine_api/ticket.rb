@@ -27,14 +27,13 @@ module RedmineApi
     validates :subject,    presence: true, if: :subject_check
 
     # custom fields
-    validate :check_custom_fields, :check_default_fields
+    validate :check_default_fields
+    validate :check_custom_fields
 
     # Redmineでは、true => 1, false => 0, nil => ''
     TRUE  = '1'
     FALSE = '0'
     NONE  = ''
-    REAL_CONNECTION_MESSAGE = 'Real connection mode.'
-    FAKE_CONNECTION_MESSAGE = 'Fake connection mode.'
 
     def initialize(hash=nil)
 
@@ -140,15 +139,8 @@ end
         end
       end
 
-      # create_field_method
-
       # デフォルト値の設定
-      # parse_uri(@@config[:uri])
-      # self.api_key    = @@config[:api_key]    if @@config[:api_key]
-      # self.user_name  = @@config[:user_name]  if @@config[:user_name]
-      # self.password   = @@config[:password]   if @@config[:password]
       self.project_id = @@config[:project_id] if @@config[:project_id]
-
 
       create_instance(hash)
 
@@ -209,7 +201,8 @@ end
       end
 
       unless self.id
-        Rails.logger.debug("Redmine::delete: found No ID!")
+        log = Logger.new(STDOUT)
+        log.debug("Redmine::delete: found No ID!")
         raise "NO ID!"
       end
 
@@ -237,7 +230,7 @@ end
     def create_issue
       issue         = {}
       custom_fields = []
-      log = Logger.new(STDOUT)
+      # log = Logger.new(STDOUT)
 
       @@default_fields_format.each do |k, v|
 
@@ -348,9 +341,9 @@ end
 
             if @@custom_fields_ids.keys.include? id
               if value.class.to_s == 'String'
-                eval "self.#{name} = '#{value}'"
+                self.send("#{name}=", "#{value}")
               else
-                eval "self.#{name} = #{value}"
+                self.send("#{name}=", value)
               end
             else
               unmatch_fields[k] = v
@@ -377,7 +370,7 @@ end
       @@custom_fields_format.each do |k, v|
         current = eval "self.#{k.to_s}"
         unless current.nil?
-          case v[:type]
+          case v[:type].to_s
           when 'Boolean'
             array.push({ id: v[:id], value: current }) if [ TRUE, FALSE ].include? current
           else
@@ -477,7 +470,6 @@ end
 
       @@custom_fields_format.each do |k, v|
 
-        # current = eval "self.#{k}"
         current = self.send(k.to_s)
 
         # 必須チェック
@@ -516,7 +508,7 @@ end
         key = k.to_sym
         f   = self.send(k.to_s)
         unless f.nil? or f.to_s == ''
-          errors.add(key, "は#{v[:type]}である必要があります。") unless f.class.to_s == v[:type]
+          errors.add(key.to_sym, "は#{v[:type]}である必要があります。") unless f.class.to_s == v[:type]
         end
 
         # _id method
@@ -524,14 +516,14 @@ end
           key2 = "#{k}_id".to_sym
           f2   = self.send("#{k.to_s}_id")
           unless f2.nil? or f2.to_s == ''
-            errors.add(key2, "は数字である必要があります。") unless f2.class.to_s == 'Fixnum'
+            errors.add(key2.to_sym, "は数字である必要があります。") unless f2.class.to_s == 'Fixnum'
           end
         end
 
       end
 
       unless self.watcher_user_ids.nil? or self.watcher_user_ids.to_s == ''
-        errors.add(:watcher_user_ids, "は配列である必要があります。") unless self.watcher_user_ids.class.to_s == v[:type]
+        errors.add(:watcher_user_ids, "は配列である必要があります。") unless self.watcher_user_ids.class.to_s == @@default_fields_format[:watcher_user][:type]
       end
 
     end

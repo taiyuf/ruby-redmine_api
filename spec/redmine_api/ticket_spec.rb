@@ -14,6 +14,7 @@ RSpec.describe RedmineApi::Ticket do
     config          = File.expand_path('../../sample.yml', __FILE__)
     yaml            = YAML.load(File.read(config))
     @default_fields = yaml['default_fields_format']
+
     @default_fields.each do |k, v|
 
       if v['type'].to_s == 'Hash'
@@ -33,13 +34,15 @@ RSpec.describe RedmineApi::Ticket do
 
         it "#{k}_name method check" do
           @r.send(k, { name: 'fuga' })
-          expect(eval "@r.#{k}_name").to eq('fuga')
+          expect(@r.send("#{k}_name")).to eq('fuga')
         end
 
         it "#{k}'s value check" do
           @r.send(k, { id: 7, name: 'bar' })
-          expect(eval "@r.#{k}[:id]").to   eq(7)
-          expect(eval "@r.#{k}[:name]").to eq('bar')
+          expect(@r.send(k)[:id]).to      eq(7)
+          expect(@r.send(k)[:name]).to    eq('bar')
+          expect(@r.send("#{k}_id")).to   eq(7)
+          expect(@r.send("#{k}_name")).to eq('bar')
         end
 
       else
@@ -60,19 +63,20 @@ RSpec.describe RedmineApi::Ticket do
   end
 
   describe 'custom_fields method' do
-    config          = File.expand_path('../../sample.yml', __FILE__)
-    yaml            = YAML.load(File.read(config))
-    @custom_fields = yaml['custom_fields_format']
-    @custom_fields.each do |k, v|
-        it "has '#{k}' method ?" do
-          expect(@r.respond_to?(k)).to eq(true)
-        end
 
-        it "#{k}'s value check" do
-          # @r.send(k, 'hoge')
-          instance_eval "@r.#{k} = 'hoge'"
-          expect(@r.send("#{k}")).to eq('hoge')
-        end
+    config         = File.expand_path('../../sample.yml', __FILE__)
+    yaml           = YAML.load(File.read(config))
+    @custom_fields = yaml['custom_fields_format']
+
+    @custom_fields.each do |k, v|
+      it "has '#{k}' method ?" do
+        expect(@r.respond_to?(k)).to eq(true)
+      end
+
+      it "#{k}'s value check" do
+        instance_eval "@r.#{k} = 'hoge'"
+        expect(@r.send("#{k}")).to eq('hoge')
+      end
     end
   end
 
@@ -129,43 +133,60 @@ RSpec.describe RedmineApi::Ticket do
     end
 
     describe 'check_default_fields' do
+
       config          = File.expand_path('../../sample.yml', __FILE__)
       yaml            = YAML.load(File.read(config))
       @default_fields = yaml['default_fields_format']
+
       @default_fields.each do |k, v|
 
-      it "#{k} allow to set id: Integer" do
-          @r.send(k, { id: 4 })
-          @r.valid?
-          expect(@r.errors.has_key?(k)).to eq(false)
+        context 'default type check' do
+          case v['type'].to_s
+
+          when 'Hash'
+            it "#{k} allow to set Hash" do
+              @r.send(k, { id: 4, name: 'hoge' })
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+            end
+            # Hashが入っているところに、Stringなどを代入しても、入らないので失敗用テストはなし
+
+          when 'String'
+            it "#{k} allow to set String" do
+              @r.send(k, 'hoge')
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+            end
+            it "#{k} do not allow to set String" do
+              @r.send(k, 1)
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+            end
+          end
         end
 
-        it "#{k} allow to set name: String" do
-          @r.send(k, { name: 'hoge' })
-          @r.valid?
-          expect(@r.errors.has_key?(k)).to eq(false)
+        context '_id method check' do
+          if v['type'].to_s == 'Hash'
+            it "#{k}_id not allow string" do
+              @r.send(k, { id: 'hoge' })
+              @r.valid?
+              expect(@r.errors.has_key?("#{k}_id".to_sym)).to eq(true)
+            end
+          end
         end
 
-        it "#{k} allow to set hash" do
-          @r.send(k, { id: 4, name: 'hoge' })
-          @r.valid?
-          expect(@r.errors.has_key?(k)).to eq(false)
+        context '.watcher_user_ids check' do
+          it 'allow Array' do
+            @r.watcher_user_ids = [1, 2]
+            @r.valid?
+            expect(@r.errors.has_key?(:watcher_user_ids)).to eq(false)
+          end
+          it 'do not allow Array' do
+            @r.watcher_user_ids = 'hoge'
+            @r.valid?
+            expect(@r.errors.has_key?(:watcher_user_ids)).to eq(true)
+          end
         end
-
-        # pending "#{k}_id not allow string: 必要なのかも含め、再検討すること"
-
-        # it "#{k}_id not allow string" do
-        #   @r.send("#{k}_id", 'hoge')
-        #   @r.valid?
-        #   expect(@r.errors.has_key?(k)).to eq(true)
-        # end
-
-        # pending "#{k}_id method check: なぜかバリデーションが働かないので、あとで直すこと"
-
-        # it "#{k}_id method check" do
-        #   @r.send(k, { id: 4 })
-        #   expect(eval "@r.#{k}_id").to eq(4)
-        # end
 
       end
     end

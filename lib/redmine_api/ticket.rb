@@ -4,6 +4,7 @@ require 'hashie'
 require 'active_model'
 require 'webmock'
 require 'logger'
+require_relative 'api'
 
 module RedmineApi
 
@@ -11,6 +12,7 @@ module RedmineApi
     include ActiveModel::Model
 
     attr_accessor :issue,
+      :api,
       :values_check,
       :subject_check,
       :watcher_user_ids,
@@ -43,39 +45,41 @@ module RedmineApi
       # config = File.expand_path(hash[:config], Rails.root)
       config = hash[:config]
       raise "File is not found: #{config}." unless File.exists? config
+      self.api = RedmineApi::Api.new(config: config)
 
       begin
         yaml = YAML.load(File.read(config))
       rescue
         raise "Could not load yaml: #{config}."
-      else
-        @@config = Hashie.symbolize_keys! yaml
       end
 
-      @@default_fields_format = @@config[:default_fields_format]
-      @@custom_fields_format  = @@config[:custom_fields_format]
-      @@default_fields_label  = []
-      @@default_fields_ids    = []
-      @@default_field_keys    = %i{ id name }
-      @@custom_fields_label   = []
-      @@custom_fields_ids     = {}
+      class_eval %Q{
+@@config                = Hashie.symbolize_keys!(#{yaml})
+@@default_fields_format = @@config[:default_fields_format]
+@@custom_fields_format  = @@config[:custom_fields_format]
+@@default_fields_label  = []
+@@default_fields_ids    = []
+@@default_field_keys    = %i{ id name }
+@@custom_fields_label   = []
+@@custom_fields_ids     = {}
 
-      # setup the default_fields and custom_fields.
-      @@default_fields_format.each do |k, v|
-        @@default_fields_label.push(k.to_sym)
+@@default_fields_format.each do |k, v|
+  @@default_fields_label.push(k.to_sym)
 
-        if v[:has_id].to_s == 'true'
-          @@default_fields_ids.push("#{k}_id".to_sym)
-        end
-      end
+  if v[:has_id].to_s == 'true'
+    @@default_fields_ids.push("#\{k\}_id".to_sym)
+  end
+end
 
-      @@custom_fields_format.each do |k, v|
-        @@custom_fields_label.push(k.to_sym)
-        @@custom_fields_ids[v[:id]] = k
-      end
+@@custom_fields_format.each do |k, v|
+  @@custom_fields_label.push(k.to_sym)
+  @@custom_fields_ids[v[:id]] = k
+end
 
-      # class_eval %q{ attr_accessor *@@custom_fields_label }
-      class_eval %Q{ attr_accessor #\{*@@custom_fields_label\} }
+attr_accessor *@@custom_fields_label
+}
+
+      # class_eval %Q{ attr_accessor #\{*@@custom_fields_label\} }
 
       #
       # デフォルトフィールド: project
@@ -91,14 +95,14 @@ module RedmineApi
           # ex: def project, project=
           %W{ #{k} #{k}= }.each do |method|
             class_eval %Q{
-        def #{method}(hash=nil)
-          if ! hash.nil? and hash.class.to_s == 'Hash'
-            @@default_field_keys.each do |f|
-              @#{k}[f] = hash[f] if hash[f]
-            end
-          end
-          @#{k}
-        end
+def #{method}(hash=nil)
+  if ! hash.nil? and hash.class.to_s == 'Hash'
+    @@default_field_keys.each do |f|
+      @#{k}[f] = hash[f] if hash[f]
+    end
+  end
+  @#{k}
+end
             }
           end
 
@@ -106,10 +110,10 @@ module RedmineApi
           @@default_field_keys.each do |f|
             %W{ #{k}_#{f.to_s} #{k}_#{f.to_s}= }.each do |method|
               class_eval %Q{
-          def #{method}(arg=nil)
-            @#{k}[:#{f.to_s}] = :#{f.to_s} == :id ? arg.to_i : arg.to_s unless arg.nil?
-            @#{k}[:#{f.to_s}]
-          end
+def #{method}(arg=nil)
+  @#{k}[:#{f.to_s}] = :#{f.to_s} == :id ? arg.to_i : arg.to_s unless arg.nil?
+  @#{k}[:#{f.to_s}]
+end
               }
             end
           end
@@ -118,10 +122,10 @@ module RedmineApi
           # ex: def subject, subject=
           %W{ #{k} #{k}= }.each do |f|
             class_eval %Q{
-          def #{f.to_s}(str=nil)
-            @#{k} = str unless str.nil?
-            @#{k}
-          end
+def #{f.to_s}(str=nil)
+  @#{k} = str unless str.nil?
+  @#{k}
+end
             }
           end
         end
@@ -131,7 +135,8 @@ module RedmineApi
       # インスタンス変数作成
       @@default_fields_format.each do |k, v|
         if v[:type] == 'Hash'
-          instance_eval %Q{ @#{k} = { id: nil, name: nil } }
+          # instance_eval %Q{ @#{k} = { id: nil, name: nil } }
+          instance_eval %Q{ @#{k} = \{ id: nil, name: nil \} }
         end
       end
 
@@ -144,7 +149,6 @@ module RedmineApi
       # self.password   = @@config[:password]   if @@config[:password]
       self.project_id = @@config[:project_id] if @@config[:project_id]
 
-      @api = RedmineApi::Api.new()
 
       create_instance(hash)
 
@@ -362,94 +366,6 @@ module RedmineApi
 
     #===
     #
-    # @param  String
-    # @return Net::HTTP::Get
-    #
-    # URLを受け取り、Net::HTTP::Getのリクエストを返す
-    # Basic認証と、APIキーの'X-Redmine-API-Key'のヘッダーを追加している
-    #
-    def make_request_get(str)
-      _make_request('get', str)
-    end
-
-    #===
-    #
-    # @param  String
-    # @return Net::HTTP::Post
-    #
-    # URLを受け取り、Net::HTTP::Postのリクエストを返す
-    # Basic認証と、APIキーの'X-Redmine-API-Key'のヘッダーを追加している
-    #
-    def make_request_post(str)
-      _make_request('post', str)
-    end
-
-    #===
-    #
-    # @param  String
-    # @return Net::HTTP::Delete
-    #
-    # URLを受け取り、Net::HTTP::のリクエストを返す
-    # Basic認証と、APIキーの'X-Redmine-API-Key'のヘッダーを追加している
-    #
-    def make_request_delete(str)
-      _make_request('delete', str)
-    end
-
-    #===
-    #
-    # @param  String
-    # @return nil
-    #
-    # URIの文字列を受け取って、host, port, pathのプロパティを設定する
-    #
-    # @example
-    #
-    # self.parse_uri('http://localhost/hoge/') #=> self.scheme = 'http'
-    #                                              self.host   = 'localhost'
-    #                                              self.port   = 80
-    #                                              self.path   = '/hoge'
-    #
-    def parse_uri(uri)
-      uri = URI.parse(uri)
-      self.scheme = uri.scheme
-      self.host   = uri.host
-      self.port   = uri.port
-      if uri.path =~ /(.*)\/$/
-        self.path = uri.path.sub(/\/$/, '')
-        self.uri  = uri.to_s.sub(/\/$/, '')
-      else
-        self.path = uri.path
-        self.uri  = uri.to_s
-      end
-    end
-
-    #===
-    #
-    # @param  String, String
-    # @return Net::HTTPRequest
-    #
-    def _make_request(type, str)
-      url = URI.parse(str)
-
-      if type.to_s == 'get'
-        req = Net::HTTP::Get.new(url.path)
-      elsif type.to_s == 'post'
-        req = Net::HTTP::Post.new(url.path)
-      elsif type.to_s == 'delete'
-        req = Net::HTTP::Delete.new(url.path)
-      else
-        raise "Unknown type: #{type}."
-      end
-      # API認証
-      req['X-Redmine-API-Key'] = self.api_key
-      # Basic認証
-      req.basic_auth self.user_name, self.password
-      req
-    end
-
-    #===
-    #
     # @param  nil
     # @return nil
     #
@@ -619,9 +535,8 @@ module RedmineApi
       end
 
     end
-    
 
-  end  
+  end
 end
 
 

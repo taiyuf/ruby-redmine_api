@@ -110,6 +110,27 @@ default_fields_format:
     required: false
 
 custom_fields_format:
+  course:
+    id: 21
+    name: '契約コース'
+    type: 'String'
+    required: true
+    values:
+      - 'Aコース'
+      - 'Bコース'
+      - 'Cコース'
+      - 'Dコース'
+      - 'Eコース'
+      - 'Fコース'
+  course_option:
+    id: 22
+    name: '契約コースオプション'
+    type: 'String'
+    required: false
+    multiple: true
+    values:
+      - 'foo'
+      - 'bar'
   zip:
     id: 8
     name: '郵便番号'
@@ -120,3 +141,16 @@ custom_fields_format:
     name: '契約者住所'
     type: 'String'
     required: true
+  contract_date:
+    id: 4
+    name: '契約開始日'
+    type: 'Date'
+    required: true
+  ps_new:
+    id: 17
+    name: '新規設置かどうか'
+    type: 'Boolean'
+    required: false
+    values:
+      - '0'
+      - '1'

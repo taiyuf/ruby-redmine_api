@@ -388,11 +388,10 @@ end
     # @return  Boolean (true or false)
     # @require config/config_common.yml:custom_fields:FIELD:required true or false
     #
-    # 与えられたシンボル名の値として、validかどうかをチェックし、true or falseを返す
+    # 与えられたシンボル名の値として、必須項目かどうかを required: true で判断し、true or falseを返す
     #
     def check_required(symbol, value=nil?)
       required = @@custom_fields_format[symbol][:required]
-
       if required && required.to_s == 'true'
         if value.nil? or value.to_s == '' or value == false
           return false
@@ -479,11 +478,16 @@ end
         errors.add(k, "の型は#{v[:type]}であるべきです。#{current} (#{current.class.to_s})") unless check_type(k, current)
 
         # 値チェック
-        #
-        # self.values_check は initializeで設定している
-        #
-        if self.values_check == true
-          errors.add(k, "の値は#{v[:values]}であるべきです。#{current} (#{current.class.to_s})") unless check_values(k, current)
+        if v[:values]
+          if v[:multiple].to_s == 'true'
+            if current.class.to_s == 'Array'
+              current.each do |f|
+                errors.add(k, "の値は#{v[:values]}であるべきです。#{f} (#{f.class.to_s})") unless check_values(k, f)
+              end
+            end
+          else
+            errors.add(k, "の値は#{v[:values]}であるべきです。#{current} (#{current.class.to_s})") unless check_values(k, current)
+          end
         end
 
       end
@@ -530,6 +534,4 @@ end
 
   end
 end
-
-
 

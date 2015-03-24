@@ -284,6 +284,7 @@ module RedmineApi
       req.basic_auth self.user_name, self.password
       req
     end
+
   end
 
 end

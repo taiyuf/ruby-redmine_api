@@ -192,7 +192,127 @@ RSpec.describe RedmineApi::Ticket do
     end
 
     describe 'check_custom_fields' do
-      
+
+      config         = File.expand_path('../../sample.yml', __FILE__)
+      yaml           = YAML.load(File.read(config))
+      @custom_fields = yaml['custom_fields_format']
+
+      @custom_fields.each do |k, v|
+        context ".#{k} check required" do
+          if v['required'].to_s == 'true'
+            it 'Required OK' do
+              @r.send("#{k}=", 'hoge')
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(false) unless v['type'].to_s == 'Date' or v['values']
+            end
+            it 'Required NOT OK' do
+              @r.send("#{k}=", nil)
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+            end
+          end
+        end
+
+        context ".#{k} check type" do
+
+          case v['type'].to_s
+          when 'String'
+            if v['multiple'].to_s == 'true'
+              it 'Multiple String OK' do
+                @r.send("#{k}=", v[:values])
+                @r.valid?
+                expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+              end
+              it 'Multiple String NOT OK' do
+                @r.send("#{k}=", 'hoge')
+                @r.valid?
+                expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+              end
+            else
+
+              unless v['values']
+                it 'String OK' do
+                  @r.send("#{k}=", 'hoge')
+                  @r.valid?
+                  expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+                end
+              end
+
+            end
+
+            it 'String NOT OK' do
+              @r.send("#{k}=", 1)
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+            end
+
+          when 'Boolean'
+            it 'Boolean OK' do
+              @r.send("#{k}=", RedmineApi::Ticket::TRUE)
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+              @r.send("#{k}=", RedmineApi::Ticket::FALSE)
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+              unless v['values']
+                # 0 or 1 制限に引っかからないように
+                @r.send("#{k}=", RedmineApi::Ticket::NONE)
+                @r.valid?
+                expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+              end
+            end
+            it 'Boolean NOT OK' do
+              @r.send("#{k}=", 'hoge')
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+            end
+
+          when 'Date'
+            it 'Date OK' do
+              @r.send("#{k}=", '2015-01-01')
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+            end
+            it 'Date NOT OK' do
+              @r.send("#{k}=", 'hoge')
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+              @r.send("#{k}=", 2)
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+            end
+
+          end
+        end
+
+        if v['values']
+          context "#{k} check values" do
+            it 'Values OK' do
+              if v['multiple']
+                value = [ v['values'][0] ]
+              else
+                value = v['values'][0]
+              end
+              @r.send("#{k}=", value)
+              @r.valid?
+              expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+            end
+            it 'Values NOT OK' do
+              if v['multiple']
+                @r.send("#{k}=", v['values'][0])
+                @r.valid?
+                expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+              else
+                @r.send("#{k}=", 'hoge')
+                @r.valid?
+                expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+              end
+            end
+          end
+        end
+
+      end
+
     end
 
   end

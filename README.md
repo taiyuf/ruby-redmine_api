@@ -42,9 +42,13 @@ Please set the default fields on redmine. sample is here: https://github.com/tai
 The field has some parameter.
 
 type:     Type of value on Ruby. ex. 'String', 'Fixnum', 'Hash', ....
+
 required: true or false. If you set true, check for presence of value at valid? method.
+
 has_id:   true or false. for example, the 'project' property has id and name, you can access by project's id. you should set the id of project by 'project_id' parameter on REST API for redmine. Please set true if the propety has id and name parameter.
+
 on_create: true or false. Please set true if you need the property on create.
+
 values:    Please set the Array of the pair, id and value. If the parameter is not include the value you set, the validation will fail.
 
 * custom_fields_format
@@ -96,7 +100,7 @@ end
 
 * View
 
-```ruby
+```
 
 .
 .

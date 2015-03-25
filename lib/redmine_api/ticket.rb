@@ -5,6 +5,7 @@ require 'active_model'
 require 'webmock'
 require 'logger'
 require_relative 'api'
+require_relative 'pagination'
 
 module RedmineApi
 
@@ -17,8 +18,7 @@ module RedmineApi
       :subject_check,
       :watcher_user_ids,
       :params,
-      :unmatch,
-      :json
+      :issue
 
     ## Validation
 
@@ -30,11 +30,6 @@ module RedmineApi
     validate :check_default_fields
     validate :check_custom_fields
 
-    # Redmineでは、true => 1, false => 0, nil => ''
-    TRUE  = '1'
-    FALSE = '0'
-    NONE  = ''
-
     def initialize(hash=nil)
 
       %i{ config }.each do |sym|
@@ -45,6 +40,7 @@ module RedmineApi
       config = hash[:config]
       raise "File is not found: #{config}." unless File.exists? config
       self.api = RedmineApi::Api.new(config: config)
+      self.fake_mode(false)
 
       begin
         yaml = YAML.load(File.read(config))
@@ -138,13 +134,29 @@ end
           instance_eval %Q{ @#{k} = \{ id: nil, name: nil \} }
         end
       end
+      @unmatch = {}
 
       # デフォルト値の設定
       self.project_id = @@config[:project_id] if @@config[:project_id]
 
-      create_instance(hash)
+      create_instance(hash[:issue]) if hash[:issue]
 
     end # def initialize
+
+
+    def unmatch=(hash=nil)
+      if hash
+        if hash.class.to_s == 'Hash'
+          @unmatch.merge(hash)
+        else
+          raise "RedmineApi::Ticket::unmatch: Hash required: #{hash}."
+        end
+      end
+
+      @unmatch
+    end
+
+    alias_method :unmatch, :unmatch=
 
     def save(hash=nil)
       if hash
@@ -169,15 +181,6 @@ end
     end
 
     def find(id)
-      # req = make_request_get("#{self.uri}/issues/#{n}.json")
-      # req.content_type = 'application/json; charset=UTF-8'
-      # res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
-
-      # unless res.code.to_i == 200
-      #   Rails.logger.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
-      #   return nil
-      # end
-
       create_from_json(@api.get_ticket(id))
       self
     end
@@ -206,16 +209,15 @@ end
         raise "NO ID!"
       end
 
-      # req = make_request_delete("#{self.uri}/issues/#{self.id}.json")
-      # res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
-
-      # unless res.code.to_i == 200
-      #   Rails.logger.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
-      #   return false
-      # end
-
-      # true
       @api.delete_ticket(self.id)
+    end
+
+    def fake_mode(flag)
+      if flag
+        self.api.fake_mode(flag)
+      end
+
+      self.api.fake_mode
     end
 
     private
@@ -255,19 +257,7 @@ end
       issue[:custom_fields] = custom_fields
       self.issue = { issue: issue }
 
-      # req = make_request_post("#{self.uri}/issues.json")
-      # req.content_type = 'application/json'
-      # req['Accept']    = 'application/json'
-      # req.body = self.issue.to_json
-      # res = Net::HTTP.new(self.host, self.port).start do |http| http.request(req) end
-
-      # unless res.code.to_i == 201
-      #   log.debug("Error code: #{ res.code }, Error Message: #{res.message} #{ res.body }")
-      #   return false
-      # end
-
-      create_from_json(@api.create_ticket(self.issue.to_json))
-      # self.id ? self.id : nil
+      create_from_json(@api.create_ticket(self.issue[:issue]))
       self
     end
 
@@ -287,12 +277,10 @@ end
             when :uri
               parse_uri(v)
             when :config
+            when :custom_fields
+              create_custom_fields(v)
             else
-              if v.class.to_s == 'String'
-                instance_eval "self.#{k} = '#{v}'"
-              else
-                instance_eval "self.#{k} = #{v}"
-              end
+              create_default_fields(k, v)
             end
           end
         end
@@ -303,55 +291,58 @@ end
 
     #===
     #
-    # @param  JSON
+    # @param  json
     # @return nil
     #
     # 
     def create_from_json(json)
 
       unmatch_fields = {}
-      self.json = Hashie.symbolize_keys json
+      self.issue = Hashie.symbolize_keys json
 
-      self.json[:issue].each do |k, v|
+      self.issue.each do |k, v|
 
-        if k.to_s != 'custom_fields'
-          # on default fields
+        if k == :custom_fields
+          create_custom_fields(v)
+        else
           target = @@default_fields_format[k]
           if target
-            if target[:type].to_s == 'Hash'
-              hash = {}
-              v.each do |k1, v1|
-                hash[k1] = v1
-              end
-              self.send(k, hash)
-            else
-              self.send(k, v)
-            end
+            create_default_fields(k, v)
           else
             unmatch_fields[k] = v
           end
 
-        else
-          # on custom fields => k == 'custom_fields'
-          v.each do |f|
+        end
+      end
 
-            id    = f[:id]
-            name  = @@custom_fields_ids[id]
-            value = f[:value]
+      self.unmatch = unmatch_fields
+    end
 
-            if @@custom_fields_ids.keys.include? id
-              if value.class.to_s == 'String'
-                self.send("#{name}=", "#{value}")
-              else
-                self.send("#{name}=", value)
-              end
-            else
-              unmatch_fields[k] = v
-            end
+    def create_default_fields(key, value)
+      self.send(key, value)
+    end
+
+    def create_custom_fields(array)
+      # on custom fields => k == 'custom_fields'
+      unmatch_fields = {}
+
+      array.each do |f|
+
+        id    = f[:id]
+        name  = @@custom_fields_ids[id]
+        value = f[:value]
+
+        if @@custom_fields_ids.keys.include? id
+
+          if value.class.to_s == 'String'
+            self.send("#{name}=", "#{value}")
+          else
+            self.send("#{name}=", value)
           end
 
+        else
+          unmatch_fields[k] = array
         end
-
       end
 
       self.unmatch = unmatch_fields
@@ -368,11 +359,11 @@ end
       array = []
 
       @@custom_fields_format.each do |k, v|
-        current = eval "self.#{k.to_s}"
+        current = self.send(k)
         unless current.nil?
           case v[:type].to_s
           when 'Boolean'
-            array.push({ id: v[:id], value: current }) if [ TRUE, FALSE ].include? current
+            array.push({ id: v[:id], value: current }) if [ RedmineApi::TRUE, RedmineApi::FALSE ].include? current
           else
             array.push({ id: v[:id], value: current })
           end
@@ -411,18 +402,19 @@ end
     #
     def check_type(symbol, value=nil)
 
-      target = @@custom_fields_format[symbol]
+      target = @@default_fields_format[symbol]
+      target = @@custom_fields_format[symbol] unless target
       type   = target[:type]
 
       unless value.nil? or type.nil?
 
         case type.to_s
         when 'Boolean'
-          return false unless [ TRUE, FALSE, NONE ].include? value.to_s
+          return false unless [ RedmineApi::TRUE, RedmineApi::FALSE, RedmineApi::NONE ].include? value.to_s
 
         when 'Date'
           return false unless value.class.to_s == 'String'
-          return false unless /\d+\-\d+\-\d+/ =~ value
+          return false unless /\d+\-\d+\-\d+T?\d?+:?\d?+:?\d?+Z?/ =~ value
 
         else
           if target[:multiple] && target[:multiple].to_s == 'true'
@@ -474,19 +466,21 @@ end
         # 必須チェック
         errors.add(k, 'は必須です。') unless check_required(k, current)
 
-        # 型チェック
-        errors.add(k, "の型は#{v[:type]}であるべきです。#{current} (#{current.class.to_s})") unless check_type(k, current)
+        unless current and current.to_s == ''
+          # 型チェック
+          errors.add(k, "の型は#{v[:type]}であるべきです。#{current} (#{current.class.to_s})") unless check_type(k, current)
 
-        # 値チェック
-        if v[:values]
-          if v[:multiple].to_s == 'true'
-            if current.class.to_s == 'Array'
-              current.each do |f|
-                errors.add(k, "の値は#{v[:values]}であるべきです。#{f} (#{f.class.to_s})") unless check_values(k, f)
+          # 値チェック
+          if v[:values]
+            if v[:multiple].to_s == 'true'
+              if current.class.to_s == 'Array'
+                current.each do |f|
+                  errors.add(k, "の値は#{v[:values]}であるべきです。#{f} (#{f.class.to_s})") unless check_values(k, f)
+                end
               end
+            else
+              errors.add(k, "の値は#{v[:values]}であるべきです。#{current} (#{current.class.to_s})") unless check_values(k, current)
             end
-          else
-            errors.add(k, "の値は#{v[:values]}であるべきです。#{current} (#{current.class.to_s})") unless check_values(k, current)
           end
         end
 
@@ -510,9 +504,9 @@ end
       @@default_fields_format.each do |k, v|
         # defaullt
         key = k.to_sym
-        f   = self.send(k.to_s)
+        f   = self.send(k)
         unless f.nil? or f.to_s == ''
-          errors.add(key.to_sym, "は#{v[:type]}である必要があります。") unless f.class.to_s == v[:type]
+          errors.add(key.to_sym, "は#{v[:type]}である必要があります。") unless check_type(k, f)
         end
 
         # _id method

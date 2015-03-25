@@ -5,7 +5,7 @@ api_key: 'hoge'
 
 default_fields_format:
   id:
-    type: 'String'
+    type: 'Fixnum'
   project:
     type: 'Hash'
     required: true

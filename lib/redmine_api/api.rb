@@ -45,9 +45,9 @@ module RedmineApi
 
       # デフォルト値の設定
       parse_uri(@@config[:uri])
-      self.api_key    = @@config[:api_key]    if @@config[:api_key]
-      self.user_name  = @@config[:user_name]  if @@config[:user_name]
-      self.password   = @@config[:password]   if @@config[:password]
+      self.api_key   = @@config[:api_key]   if @@config[:api_key]
+      self.user_name = @@config[:user_name] if @@config[:user_name]
+      self.password  = @@config[:password]  if @@config[:password]
 
       @fake_mode = nil
       self.fake_mode(false)
@@ -281,7 +281,7 @@ module RedmineApi
       # API認証
       req['X-Redmine-API-Key'] = self.api_key
       # Basic認証
-      req.basic_auth self.user_name, self.password
+      req.basic_auth self.user_name, self.password if self.user_name and self.password
       req
     end
 

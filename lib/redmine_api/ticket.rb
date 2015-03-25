@@ -9,8 +9,37 @@ require_relative 'pagination'
 
 #=lib/redmine_api/ticket.rb
 #
-
-
+#== Create or Save
+#
+# ticket = RedmineApi::Ticket.new(config: 'path/to/config_yaml')
+# ticket.create(hash)
+# subject = ticket.subject
+#  .
+#  .
+#  .
+#
+#  or
+#
+# ticket = RedmineApi::Ticket.new(config: 'path/to/config_yaml', issue: hash)
+# ticket.save
+# subject = ticket.subject
+#  .
+#  .
+#  .
+#
+#== Find
+#
+# ticket = RedmineApi::Ticket.new(config: 'path/to/config_yaml')
+# ticket.find(2)
+# subject = ticket.subject
+#  .
+#  .
+#  .
+#
+#== Delete
+#
+# ticket.delete or ticket.find(3).delete
+#
 module RedmineApi
 
   class Ticket
@@ -43,6 +72,7 @@ module RedmineApi
       # config = File.expand_path(hash[:config], Rails.root)
       config = hash[:config]
       raise "File is not found: #{config}." unless File.exists? config
+
       self.api = RedmineApi::Api.new(config: config)
       self.fake_mode(false)
 
@@ -78,10 +108,7 @@ end
 attr_accessor *@@custom_fields_label
 }
 
-      # class_eval %Q{ attr_accessor #\{*@@custom_fields_label\} }
-
-      #
-      # デフォルトフィールド: project
+      # デフォルトフィールド: project, etc....
       #
       # self.project      #=> {id: N, name: ''}
       # self.project_id   #=> self.project[:id]
@@ -128,13 +155,11 @@ end
             }
           end
         end
-
       end
 
       # インスタンス変数作成
       @@default_fields_format.each do |k, v|
         if v[:type] == 'Hash'
-          # instance_eval %Q{ @#{k} = { id: nil, name: nil } }
           instance_eval %Q{ @#{k} = \{ id: nil, name: nil \} }
         end
       end
@@ -146,7 +171,6 @@ end
       create_instance(hash[:issue]) if hash[:issue]
 
     end # def initialize
-
 
     def unmatch=(hash=nil)
       if hash
@@ -162,37 +186,73 @@ end
 
     alias_method :unmatch, :unmatch=
 
-    def save(hash=nil)
-      if hash
-        create_instance(hash)
-      end
-
+    #===
+    #
+    # @param  Hash
+    # @return RedmineApi::Ticket Object or false
+    #
+    # @example
+    #
+    # r       = RedmineApi::Ticket.new(config: path_to_config,
+    #                                  issue:  hash)
+    # r.save
+    # id      = r.id
+    # subject = r.subject
+    #
+    def save
       if valid?
         create_issue
+        self
+      else
+        false
       end
 
-      self
     end
 
+    #===
+    #
+    # @param  Hash
+    # @return RedmineApi::Ticket Object or false
+    #
+    # @example
+    #
+    # r       = RedmineApi::Ticket.new(config: path_to_config)
+    # r.create(hash)
+    # id      = r.id
+    # subject = r.subject
+    #
     def create(hash)
       create_instance(hash)
 
       if valid?
         create_issue
+        self
+      else
+        false
       end
 
-      self
     end
 
+    #===
+    #
+    # @param  Fixnum
+    # @return RedmineApi::Ticket Object
+    #
+    # @example
+    #
+    # r = RedmineApi::Ticket.new(config: path_to_config)
+    # r.find(2)
+    # subject = r.subject
+    #
     def find(id)
-      create_from_json(@api.get_ticket(id))
+      create_from_json(self.api.get_ticket(id))
       self
     end
 
     #===
     #
     # @param  Fixnum or nil
-    # @return Boolean (true or false)
+    # @return true or false
     #
     # チケットナンバーを受け取り、チケットを削除する
     #
@@ -213,9 +273,16 @@ end
         raise "NO ID!"
       end
 
-      @api.delete_ticket(self.id)
+      self.api.delete_ticket(self.id)
     end
 
+    #===
+    #
+    # @param  true or false
+    # @return true or false
+    #
+    # 実際にNet::HTTPで接続しに行くか、Webmockでダミー接続しに行くかのフラグを設定する
+    #
     def fake_mode(flag)
       if flag
         self.api.fake_mode(flag)
@@ -236,7 +303,6 @@ end
     def create_issue
       issue         = {}
       custom_fields = []
-      # log = Logger.new(STDOUT)
 
       @@default_fields_format.each do |k, v|
 
@@ -261,7 +327,7 @@ end
       issue[:custom_fields] = custom_fields
       self.issue = { issue: issue }
 
-      create_from_json(@api.create_ticket(self.issue[:issue]))
+      create_from_json(self.api.create_ticket(self.issue[:issue]))
       self
     end
 
@@ -270,35 +336,33 @@ end
     # @param  Hash or nil
     # @return nil
     #
-    def create_instance(hash=nil)
+    def create_instance(hash)
       # 引数の値を設定
-      unless hash.nil?
-        if hash[:json]
-          create_from_json(hash[:json])
-        else
-          hash.each do |k, v|
-            case k
-            when :uri
-              parse_uri(v)
-            when :config
-            when :custom_fields
-              create_custom_fields(v)
-            else
-              create_default_fields(k, v)
-            end
+      if hash[:json]
+        create_from_json(hash[:json])
+      else
+        hash.each do |k, v|
+          case k
+          when :uri
+            parse_uri(v)
+          when :config
+          when :custom_fields
+            create_custom_fields(v)
+          else
+            create_default_fields(k, v)
           end
         end
       end
 
     end
 
-
     #===
     #
-    # @param  json
+    # @param  JSON
     # @return nil
     #
-    # 
+    # JSONの情報を元に、自分自身に情報に登録する
+    #
     def create_from_json(json)
 
       unmatch_fields = {}
@@ -311,7 +375,7 @@ end
         else
           target = @@default_fields_format[k]
           if target
-            create_default_fields(k, v)
+            self.send(key, value)
           else
             unmatch_fields[k] = v
           end
@@ -320,14 +384,17 @@ end
       end
 
       self.unmatch = unmatch_fields
+      nil
     end
 
-    def create_default_fields(key, value)
-      self.send(key, value)
-    end
-
+    #===
+    #
+    # @param  Array
+    # @return nil
+    #
+    # 渡されたcustom_fieldsの配列を元に、自分自身に登録する
+    #
     def create_custom_fields(array)
-      # on custom fields => k == 'custom_fields'
       unmatch_fields = {}
 
       array.each do |f|
@@ -350,6 +417,7 @@ end
       end
 
       self.unmatch = unmatch_fields
+      nil
     end
 
     #===
@@ -359,23 +427,23 @@ end
     #
     # custom_fieldsの配列([{ id: N, value: X }, ... ])を作成し、登録する
     #
-    def publish_custom_fields
-      array = []
-
-      @@custom_fields_format.each do |k, v|
-        current = self.send(k)
-        unless current.nil?
-          case v[:type].to_s
-          when 'Boolean'
-            array.push({ id: v[:id], value: current }) if [ RedmineApi::TRUE, RedmineApi::FALSE ].include? current
-          else
-            array.push({ id: v[:id], value: current })
-          end
-        end
-      end
-
-      self.custom_fields = array
-    end
+    # def publish_custom_fields
+    #   array = []
+    #
+    #   @@custom_fields_format.each do |k, v|
+    #     current = self.send(k)
+    #     unless current.nil?
+    #       case v[:type].to_s
+    #       when 'Boolean'
+    #         array.push({ id: v[:id], value: current }) if [ RedmineApi::TRUE, RedmineApi::FALSE ].include? current
+    #       else
+    #         array.push({ id: v[:id], value: current })
+    #       end
+    #     end
+    #   end
+    #
+    #   self.custom_fields = array
+    # end
 
     #===
     #
@@ -468,22 +536,22 @@ end
         current = self.send(k.to_s)
 
         # 必須チェック
-        errors.add(k, 'は必須です。') unless check_required(k, current)
+        errors.add(k, ' is requied.') unless check_required(k, current)
 
         unless current and current.to_s == ''
           # 型チェック
-          errors.add(k, "の型は#{v[:type]}であるべきです。#{current} (#{current.class.to_s})") unless check_type(k, current)
+          errors.add(k, " should be #{v[:type]}, #{current} (#{current.class.to_s})") unless check_type(k, current)
 
           # 値チェック
           if v[:values]
             if v[:multiple].to_s == 'true'
               if current.class.to_s == 'Array'
                 current.each do |f|
-                  errors.add(k, "の値は#{v[:values]}であるべきです。#{f} (#{f.class.to_s})") unless check_values(k, f)
+                  errors.add(k, " should be #{v[:values]}, #{f} (#{f.class.to_s})") unless check_values(k, f)
                 end
               end
             else
-              errors.add(k, "の値は#{v[:values]}であるべきです。#{current} (#{current.class.to_s})") unless check_values(k, current)
+              errors.add(k, " should be #{v[:values]}. #{current} (#{current.class.to_s})") unless check_values(k, current)
             end
           end
         end
@@ -510,7 +578,7 @@ end
         key = k.to_sym
         f   = self.send(k)
         unless f.nil? or f.to_s == ''
-          errors.add(key.to_sym, "は#{v[:type]}である必要があります。") unless check_type(k, f)
+          errors.add(key.to_sym, " should be #{v[:type]}.") unless check_type(k, f)
         end
 
         # _id method
@@ -518,14 +586,14 @@ end
           key2 = "#{k}_id".to_sym
           f2   = self.send("#{k.to_s}_id")
           unless f2.nil? or f2.to_s == ''
-            errors.add(key2.to_sym, "は数字である必要があります。") unless f2.class.to_s == 'Fixnum'
+            errors.add(key2.to_sym, " should be Number.") unless f2.class.to_s == 'Fixnum'
           end
         end
 
       end
 
       unless self.watcher_user_ids.nil? or self.watcher_user_ids.to_s == ''
-        errors.add(:watcher_user_ids, "は配列である必要があります。") unless self.watcher_user_ids.class.to_s == @@default_fields_format[:watcher_user][:type]
+        errors.add(:watcher_user_ids, " should be Array.") unless self.watcher_user_ids.class.to_s == @@default_fields_format[:watcher_user][:type]
       end
 
     end

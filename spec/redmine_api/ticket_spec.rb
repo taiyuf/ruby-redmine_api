@@ -31,7 +31,6 @@ RSpec.describe RedmineApi::Ticket do
           expect(@r.respond_to?("#{k}_name")).to eq(true)
         end
 
-
         it "#{k}_name method check" do
           @r.send(k, { name: 'fuga' })
           expect(@r.send("#{k}_name")).to eq('fuga')
@@ -249,9 +248,11 @@ RSpec.describe RedmineApi::Ticket do
               @r.send("#{k}=", RedmineApi::TRUE)
               @r.valid?
               expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+
               @r.send("#{k}=", RedmineApi::FALSE)
               @r.valid?
               expect(@r.errors.has_key?(k.to_sym)).to eq(false)
+
               unless v['values']
                 # 0 or 1 制限に引っかからないように
                 @r.send("#{k}=", RedmineApi::NONE)
@@ -275,6 +276,7 @@ RSpec.describe RedmineApi::Ticket do
               @r.send("#{k}=", 'hoge')
               @r.valid?
               expect(@r.errors.has_key?(k.to_sym)).to eq(true)
+
               @r.send("#{k}=", 2)
               @r.valid?
               expect(@r.errors.has_key?(k.to_sym)).to eq(true)

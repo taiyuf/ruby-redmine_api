@@ -1,0 +1,125 @@
+uri: 'http://example.com/hoge'
+user_name: 'foo'
+password: 'bar'
+api_key: 'hoge'
+
+default_fields_format:
+  id:
+    type: 'Fixnum'
+  project:
+    type: 'Hash'
+    required: true
+    has_id: true
+    on_create: true
+  tracker:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+    # values:
+    #   '5': 'foo'
+    #   '6': 'bar'
+  subject:
+    type: 'String'
+    required: false
+    on_create: true
+  description:
+    type: 'String'
+    required: false
+    on_create: true
+  priority:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+    # values:
+    #   '1': 'foo'
+    #   '2': 'bar'
+  category:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  status:
+    type: 'Hash'
+    required: false
+    has_id: true
+    # values:
+    #   '1': 'foo'
+    #   '2': 'bar'
+  fixed_version:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  assigned_to:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  custom_fields:
+    type: 'Array'
+    required: false
+  parent_issue:
+    type: 'Hash'
+    required: false
+    has_id: true
+    on_create: true
+  watcher_user:
+    type: 'Array'
+    required: false
+    on_create: true
+  is_private:
+    type: 'Boolean'
+    required: false
+    # values:
+    #   '0': 'yes'
+    #   '1': 'no'
+    on_create: true
+  estimated_hours:
+    type: 'String'
+    required: false
+    on_create: true
+  author:
+    type: 'Hash'
+    required: false
+    has_id: true
+  start_date:
+    type: 'Date'
+    required: false
+  created_on:
+    type: 'Date'
+    required: false
+  updated_on:
+    type: 'Date'
+    required: false
+  notes:
+    type: 'String'
+    required: false
+  private_notes:
+    type: 'String'
+    required: false
+
+custom_fields_format:
+  # foo:
+  #   id: 1
+  #   name: 'Foo'
+  #   type: 'String'
+  #   required: true
+  #   values:
+  #     - 'A'
+  #     - 'B'
+  #     - 'C'
+  # foo_date:
+  #   id: 2
+  #   name: 'Foo Date'
+  #   type: 'Date'
+  #   required: true
+  # bar:
+  #   id: 3
+  #   name: 'Bar'
+  #   type: 'Boolean'
+  #   required: false
+  #   values:
+  #     - '0'
+  #     - '1'

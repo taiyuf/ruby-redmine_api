@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 require 'redmine_api/version'
-require 'redmine_api/client'
 require 'redmine_api/ticket'
 require 'redmine_api/api'
 require 'redmine_api/pagination'

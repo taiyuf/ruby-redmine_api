@@ -368,70 +368,121 @@ RSpec.describe RedmineApi::Ticket do
         end
       end
 
-      describe '.create' do
+      describe '.create and .save' do
         before do
           result = {"issue"=>{"id"=>52, "project"=>{"id"=>4, "name"=>"システムテスト用プロジェクト"}, "tracker"=>{"id"=>5, "name"=>"契約"}, "status"=>{"id"=>1, "name"=>"新規"}, "priority"=>{"id"=>2, "name"=>"通常"}, "author"=>{"id"=>10, "name"=>"api redmine"}, "subject"=>"テスト", "description"=>"詳細内容", "start_date"=>"2015-01-21", "done_ratio"=>0, "spent_hours"=>0.0, "custom_fields"=>[{"id"=>21, "name"=>"契約コース", "value"=>"Bコース"}, {"id"=>22, "name"=>"契約コースオプション", "multiple"=>true, "value"=>["foo", "bar"]}, {"id"=>4, "name"=>"契約開始日", "value"=>"2015-01-20"}, {"id"=>8, "name"=>"郵便番号", "value"=>"111-2222"}, {"id"=>9, "name"=>"契約者住所", "value"=>"テスト住所"}, {"id"=>17, "name"=>"新規設置かどうか", "value"=>"1"}], "created_on"=>"2015-01-21T06:44:30Z", "updated_on"=>"2015-01-21T06:44:30Z"}}
 
           @dummy = { project_id:    4,
-                    tracker_id:    5,
-                    subject:       "テストサブジェクト",
-                    description:   "詳細内容",
-                    priority_id:   2,
-                    custom_fields: [ { id: 21, value: 'Bコース' },
-                                     { id: 22, value: %w{ foo bar } },
-                                     { id: 8,  value: '111-2222'},
-                                     { id: 9,  value: 'テスト住所'},
-                                     { id: 4,  value: '2015-01-20'},
-                                     { id: 17, value: '1'}] }
+                     tracker_id:    5,
+                     subject:       "テストサブジェクト",
+                     description:   "詳細内容",
+                     priority_id:   2,
+                     custom_fields: [ { id: 21, value: 'Bコース' },
+                                      { id: 22, value: %w{ foo bar } },
+                                      { id: 8,  value: '111-2222'},
+                                      { id: 9,  value: 'テスト住所'},
+                                      { id: 4,  value: '2015-01-20'},
+                                      { id: 17, value: '1'}] }
 
           stub_request(:post, "http://#{@user_name}:#{@password}@example.com/hoge/issues.json")
-            .with(
-                  body:    { issue: @dummy }.to_json,
+            .with(body:    { issue: @dummy }.to_json,
                   headers: { 'Accept'            => 'application/json',
                              'Content-Type'      => 'application/json',
                              'X-Redmine-Api-Key' => 'hoge' })
             .to_return(status:  201,
                        body:    result.to_json,
                        headers: { 'Content-Type' => 'application/json' })
-          @r.create(@dummy)
         end
 
-        it 'project' do
-          expect(@r.project_id).to eq(4)
-          expect(@r.project_name).to eq('システムテスト用プロジェクト')
+        context 'create' do
+          before do
+            @r.create(@dummy)
+          end
+
+          it 'project' do
+            expect(@r.project_id).to eq(4)
+            expect(@r.project_name).to eq('システムテスト用プロジェクト')
+          end
+          it 'tracker' do
+            expect(@r.tracker_name).to eq('契約')
+          end
+          it 'priority' do
+            expect(@r.priority_name).to eq('通常')
+          end
+          it 'author' do
+            expect(@r.author_name).to eq('api redmine')
+          end
+          it 'subject' do
+            expect(@r.subject).to eq('テスト')
+          end
+          it 'description' do
+            expect(@r.description).to eq('詳細内容')
+          end
+          it 'course' do
+            expect(@r.course).to eq('Bコース')
+          end
+          it 'course_option' do
+            expect(@r.course_option).to eq(%w{ foo bar })
+          end
+          it 'zip' do
+            expect(@r.zip).to eq('111-2222')
+          end
+          it 'address' do
+            expect(@r.address).to eq('テスト住所')
+          end
+          it 'contract_date' do
+            expect(@r.contract_date).to eq('2015-01-20')
+          end
+          it 'ps_new' do
+            expect(@r.ps_new).to eq('1')
+          end
+
         end
-        it 'tracker' do
-          expect(@r.tracker_name).to eq('契約')
-        end
-        it 'priority' do
-          expect(@r.priority_name).to eq('通常')
-        end
-        it 'author' do
-          expect(@r.author_name).to eq('api redmine')
-        end
-        it 'subject' do
-          expect(@r.subject).to eq('テスト')
-        end
-        it 'description' do
-          expect(@r.description).to eq('詳細内容')
-        end
-        it 'course' do
-          expect(@r.course).to eq('Bコース')
-        end
-        it 'course_option' do
-          expect(@r.course_option).to eq(%w{ foo bar })
-        end
-        it 'zip' do
-          expect(@r.zip).to eq('111-2222')
-        end
-        it 'address' do
-          expect(@r.address).to eq('テスト住所')
-        end
-        it 'contract_date' do
-          expect(@r.contract_date).to eq('2015-01-20')
-        end
-        it 'ps_new' do
-          expect(@r.ps_new).to eq('1')
+
+        context '.save' do
+          before do
+            @rs = RedmineApi::Ticket.new(config: @config, issue: @dummy)
+            @rs.save
+          end
+
+          it 'project' do
+            expect(@rs.project_id).to eq(4)
+            expect(@rs.project_name).to eq('システムテスト用プロジェクト')
+          end
+          it 'tracker' do
+            expect(@rs.tracker_name).to eq('契約')
+          end
+          it 'priority' do
+            expect(@rs.priority_name).to eq('通常')
+          end
+          it 'author' do
+            expect(@rs.author_name).to eq('api redmine')
+          end
+          it 'subject' do
+            expect(@rs.subject).to eq('テスト')
+          end
+          it 'description' do
+            expect(@rs.description).to eq('詳細内容')
+          end
+          it 'course' do
+            expect(@rs.course).to eq('Bコース')
+          end
+          it 'course_option' do
+            expect(@rs.course_option).to eq(%w{ foo bar })
+          end
+          it 'zip' do
+            expect(@rs.zip).to eq('111-2222')
+          end
+          it 'address' do
+            expect(@rs.address).to eq('テスト住所')
+          end
+          it 'contract_date' do
+            expect(@rs.contract_date).to eq('2015-01-20')
+          end
+          it 'ps_new' do
+            expect(@rs.ps_new).to eq('1')
+          end
+
         end
       end
 

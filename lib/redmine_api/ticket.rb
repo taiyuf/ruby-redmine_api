@@ -7,6 +7,10 @@ require 'logger'
 require_relative 'api'
 require_relative 'pagination'
 
+#=lib/redmine_api/ticket.rb
+#
+
+
 module RedmineApi
 
   class Ticket
